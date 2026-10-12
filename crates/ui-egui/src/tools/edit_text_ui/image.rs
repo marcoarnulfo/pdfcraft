@@ -259,6 +259,8 @@ pub(crate) enum ImageAction {
     Link(usize, usize),
     /// Open Recognize Text for the picture's page.
     Recognize(usize),
+    /// Paste Image onto a page (from the page menu).
+    Paste(usize),
 }
 
 /// Where the rotate knob sits, and the edge point its stem starts from: above the middle of the
