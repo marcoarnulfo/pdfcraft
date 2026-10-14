@@ -1151,3 +1151,76 @@ fn sidebar_collapse_and_resize_preserves_scroll_position() {
     let rel_y_reopened = rect_reopened.min.y - vp_reopened.min.y;
     assert!((rel_y_reopened - rel_y_before).abs() < 1.0, "page 2 scroll position preserved on reopen: before {rel_y_before}, after {rel_y_reopened}");
 }
+
+#[test]
+fn continuous_preference_survives_restart_with_pdf_initial_layouts() {
+    use pdfcraft_ui_egui::canvas::PageLayout;
+
+    for continuous in [true, false] {
+        let mut app = PdfCraftApp::new();
+        app.set_option("default-continuous", if continuous { "on" } else { "off" }).unwrap();
+        app.set_option("default-zoom", "125%").unwrap();
+        app.set_option("always-default-view", "on").unwrap();
+        let saved = app.persist();
+        let mut fresh = PdfCraftApp::new();
+        fresh.restore(&saved);
+        assert!(fresh.always_default_view, "the priority preference also survives the restart");
+        assert_eq!(fresh.view_defaults.continuous, continuous);
+
+        for (pdf_layout, layout, cover) in [
+            ("/PageLayout /SinglePage", PageLayout::Single, false),
+            ("/PageLayout /OneColumn", PageLayout::Single, false),
+            ("/PageLayout /TwoPageLeft", PageLayout::TwoUp, false),
+            ("/PageLayout /TwoColumnLeft", PageLayout::TwoUp, false),
+            ("/PageLayout /TwoPageRight", PageLayout::TwoUp, true),
+            ("/PageLayout /TwoColumnRight", PageLayout::TwoUp, true),
+            ("", PageLayout::Single, false),
+        ] {
+            let pdf = String::from_utf8_lossy(PAGES)
+                .replace("/Pages 2 0 R >>", &format!("/Pages 2 0 R {pdf_layout} /PageMode /UseThumbs /OpenAction [4 0 R /Fit] >>"));
+            fresh.open_bytes("initial-layout.pdf", None, pdf.into_bytes()).unwrap();
+            let view = fresh.views.last().unwrap();
+            assert_eq!(view.continuous(), continuous, "saved continuous={continuous}, {pdf_layout}");
+            assert_eq!((view.layout, view.cover), (PageLayout::Single, false), "the saved base layout wins over {layout:?}, cover={cover}");
+            assert_eq!((view.fit, view.zoom), (pdfcraft_ui_egui::canvas::Fit::None, 1.25), "the saved zoom also wins");
+            assert_eq!(view.current, 1, "the PDF still chooses its opening page");
+            assert_eq!(fresh.right, Some(pdfcraft_ui_egui::RightPanel::Pages), "the PDF still chooses its navigation panel");
+        }
+    }
+}
+
+#[test]
+fn preferences_continuous_scrolling_is_used_after_restart() {
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    let mut h = harness(&[("default-continuous", "off"), ("default-zoom", "50%")]);
+    assert!(h.state_mut().execute("app.preferences"));
+    h.run_steps(3);
+    h.get_by_label("Continuous scrolling").scroll_to_me();
+    h.run_steps(4);
+    h.get_by_label("Continuous scrolling").click();
+    h.run_steps(2);
+    assert!(h.state().view_defaults.continuous);
+    h.get_by_label("Always use my default zoom and page layout").scroll_to_me();
+    h.run_steps(4);
+    h.get_by_label("Always use my default zoom and page layout").click();
+    h.run_steps(2);
+    assert!(h.state().always_default_view);
+
+    let saved = h.state().persist();
+    let pdf = String::from_utf8_lossy(PAGES).replace("/Pages 2 0 R >>", "/Pages 2 0 R /PageLayout /SinglePage >>");
+    let mut fresh = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(move |_cc| {
+        let mut app = PdfCraftApp::new();
+        app.restore(&saved);
+        app.open_bytes("initial-layout.pdf", None, pdf.into_bytes()).unwrap();
+        app
+    });
+    fresh.run_steps(8);
+    assert!(fresh.state().views[0].continuous());
+    let (first, second) = (rect(&fresh, 0).expect("first page visible"), rect(&fresh, 1).expect("second page visible"));
+    assert!(second.min.y > first.max.y, "the restored view actually stacks later pages vertically");
+    fresh.get_by_label_contains("Page display:").click();
+    fresh.run_steps(3);
+    let checkbox = fresh.get_by_label("Continuous scrolling");
+    assert_eq!(checkbox.accesskit_node().toggled(), Some(egui::accesskit::Toggled::True));
+}
