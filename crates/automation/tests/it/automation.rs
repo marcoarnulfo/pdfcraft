@@ -2436,6 +2436,9 @@ fn duplicating_and_cropping_through_tools() {
     assert!(w > 50.0 && w < 120.0 && h > 10.0 && h < 30.0, "page 3 is now {w}×{h}");
     assert_eq!(r["page_sizes"][1], json!([100.0, 150.0]));
     assert_eq!(page_text(&mut a, doc)[2], "Page 2", "the text is still inside");
+    // Page 3 is already at its content: running it again changes no page.
+    let r = ok(&mut a, "page_set_box", json!({ "doc": doc, "pages": [3], "remove_white_margins": true }));
+    assert_eq!(r["trimmed_pages"], json!([]));
     assert!(
         matches!(
             a.call("page_set_box", &json!({ "doc": doc, "remove_white_margins": true, "margins": [1, 1, 1, 1] })),

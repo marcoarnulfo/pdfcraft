@@ -3806,6 +3806,12 @@ impl Session {
                 }
                 Edit::EditTextBlock { page, block, text, style }
             }
+            // A page already at its content keeps its box: the measure only differs by float noise.
+            Edit::RemoveWhiteMargins { which, mut rects } => {
+                let boxes = pdfcraft_organize::page_boxes(&editor.cos).unwrap_or_default();
+                rects.retain(|(p, r)| boxes.get(*p).is_none_or(|b| (0..4).any(|k| (b[which.index()][k] - r[k]).abs() > 1e-3)));
+                Edit::RemoveWhiteMargins { which, rects }
+            }
             other => other,
         };
         // Nothing to bake: leave undo history and the dirty flag alone.

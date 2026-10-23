@@ -1563,8 +1563,12 @@ impl Automation {
                 return Err(ToolError::InvalidArgs("remove_white_margins sets the box itself; pass it without margins or rect".into()));
             }
             let rects = doc.white_margin_crops(&pages);
-            let trimmed: Vec<usize> = rects.iter().map(|(p, _)| p + 1).collect();
+            let before = doc.page_boxes();
             let mut out = self.apply(a, Edit::RemoveWhiteMargins { which, rects })?;
+            let after = self.doc(a)?.page_boxes();
+            // A page already at its content is measured but left alone: only report the ones cropped.
+            let trimmed: Vec<usize> =
+                pages.iter().filter(|&&p| before.get(p).map(|b| b[which.index()]) != after.get(p).map(|b| b[which.index()])).map(|p| p + 1).collect();
             out["trimmed_pages"] = json!(trimmed);
             out["page_sizes"] = json!(self.doc(a)?.info.pages.iter().map(|p| [p.width, p.height]).collect::<Vec<_>>());
             return Ok(out);

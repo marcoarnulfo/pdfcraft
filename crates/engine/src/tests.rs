@@ -2619,6 +2619,29 @@ fn remove_white_margins_crops_each_page_to_its_content() {
     assert_eq!(s.get(id).unwrap().can_undo(), None);
 }
 
+/// #1156: a page already cropped to its content, or whose content fills it, is left alone: running
+/// Remove White Margins again adds no undo step. The A4 page's measure differs from its box only
+/// by float noise.
+#[test]
+fn remove_white_margins_leaves_a_page_already_at_its_content() {
+    let source = drawn_pages(&[("", "0 0 0 rg 50 100 80 60 re f"), ("/MediaBox [0 0 595.276 841.89]", "0 0 0 rg 0 0 595.276 841.89 re f")]);
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("drawn.pdf", None, Arc::new(source), None).unwrap();
+    let full = s.get(id).unwrap().white_margin_crops(&[1]);
+    assert_eq!(full.len(), 1, "the full page is measured");
+    s.apply(id, Edit::RemoveWhiteMargins { which: PageBox::Crop, rects: full }).unwrap();
+    assert_eq!(s.get(id).unwrap().can_undo(), None, "content that fills the page: nothing to trim");
+    let first = s.get(id).unwrap().white_margin_crops(&[0]);
+    s.apply(id, Edit::RemoveWhiteMargins { which: PageBox::Crop, rects: first }).unwrap();
+    let trimmed = s.get(id).unwrap().page_boxes()[0][1];
+    let again = s.get(id).unwrap().white_margin_crops(&[0, 1]);
+    assert_eq!(again.len(), 2, "both pages are measured again");
+    s.apply(id, Edit::RemoveWhiteMargins { which: PageBox::Crop, rects: again }).unwrap();
+    assert_eq!(s.get(id).unwrap().page_boxes()[0][1], trimmed);
+    s.undo(id).unwrap();
+    assert_eq!(s.get(id).unwrap().page_boxes()[0][1], [0.0, 0.0, 200.0, 300.0], "one undo goes back past the first trim");
+}
+
 /// #1156: a content edge that falls inside a pixel, covering too little of it to darken it, is
 /// still inside the crop: the measured box is padded by a pixel.
 #[test]
