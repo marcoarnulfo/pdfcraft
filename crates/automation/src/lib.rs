@@ -1558,6 +1558,17 @@ impl Automation {
                 })
                 .transpose()
         };
+        if a.opt_bool("remove_white_margins")?.unwrap_or(false) {
+            if a.get("margins").is_some() || a.get("rect").is_some() {
+                return Err(ToolError::InvalidArgs("remove_white_margins sets the box itself; pass it without margins or rect".into()));
+            }
+            let rects = doc.white_margin_crops(&pages);
+            let trimmed: Vec<usize> = rects.iter().map(|(p, _)| p + 1).collect();
+            let mut out = self.apply(a, Edit::RemoveWhiteMargins { which, rects })?;
+            out["trimmed_pages"] = json!(trimmed);
+            out["page_sizes"] = json!(self.doc(a)?.info.pages.iter().map(|p| [p.width, p.height]).collect::<Vec<_>>());
+            return Ok(out);
+        }
         let spec = match (nums("margins")?, nums("rect")?) {
             (Some(_), Some(_)) => return Err(ToolError::InvalidArgs("pass margins or rect, not both".into())),
             (Some(m), None) => BoxSpec::Margins(m),
