@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use pdfcraft_render::{PageInfo, PageRenderer, ReadingColors, RenderConfig, RenderRequest};
+use pdfcraft_render::{PageInfo, PageRenderer, ReadingColors, RenderConfig, RenderRequest, RenderWarning};
 
 use crate::{DocId, Document, Edit, EditError, PageBox, Session, check_permission, guard};
 
@@ -20,7 +20,7 @@ const MAX_PIXELS: f32 = 4_000_000.0;
 const WHITE: u8 = 250;
 
 /// The user-space bounds of what `page` shows that is not white, inside its crop box. `None`
-/// when the page is blank or can't be rendered.
+/// when the page is blank, can't be rendered, or was only partly rendered.
 fn content_bounds_with(r: &mut PageRenderer, info: &PageInfo, page: usize) -> Option<[f64; 4]> {
     let (w, h) = (info.width, info.height);
     if !(w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0) {
@@ -29,7 +29,9 @@ fn content_bounds_with(r: &mut PageRenderer, info: &PageInfo, page: usize) -> Op
     let pixels = w * h * SCALE * SCALE;
     let scale = if pixels > MAX_PIXELS { SCALE * (MAX_PIXELS / pixels).sqrt() } else { SCALE };
     let shot = guard(|| r.render(RenderRequest { page, scale, ..Default::default() })).ok()?;
-    if shot.error.is_some() || shot.width == 0 || shot.height == 0 {
+    // A render that skipped content for its limits shows less than the page holds: cropping to it
+    // could hide what it left out, so the page keeps its box.
+    if shot.error.is_some() || shot.width == 0 || shot.height == 0 || shot.warnings.contains(&RenderWarning::ContentTruncated) {
         return None;
     }
     let width = shot.width as usize;

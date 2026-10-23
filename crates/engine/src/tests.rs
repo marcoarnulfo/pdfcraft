@@ -2655,6 +2655,58 @@ fn remove_white_margins_keeps_a_content_edge_between_pixels() {
     assert!(c[1] <= 100.49 && c[1] >= 99.49, "bottom {}", c[1]);
 }
 
+/// A one-page PDF whose content stream paints a black rectangle and then runs on in spaces far past
+/// the decoder's budget, so the render skips the rest and says so. The deflate stream is written
+/// by hand (a fixed-Huffman block: the ops as literals, then 258-byte copies of the last space).
+fn pdf_with_content_past_the_budget(ops: &str) -> Vec<u8> {
+    let (mut data, mut acc, mut bits) = (Vec::new(), 0u64, 0u32);
+    let mut put = |value: u32, n: u32| {
+        for i in (0..n).rev() {
+            acc |= u64::from((value >> i) & 1) << bits;
+            bits += 1;
+            if bits == 8 {
+                data.push(acc as u8);
+                (acc, bits) = (0, 0);
+            }
+        }
+    };
+    put(0b110, 3); // final block, fixed Huffman (BFINAL, then BTYPE 01 read least significant bit first)
+    for b in ops.bytes().chain(std::iter::once(b' ')) {
+        put(0b0011_0000 + u32::from(b), 8);
+    }
+    for _ in 0..(300usize << 20) / 258 {
+        put(0b1100_0101, 8); // length 258
+        put(0, 5); // distance 1
+    }
+    put(0, 7); // end of block
+    put(0, 8); // flushes the last byte
+    let mut stream = vec![0x78, 0x01];
+    stream.extend_from_slice(&data);
+    let mut pdf = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /Contents 4 0 R >> endobj\n".to_vec();
+    pdf.extend_from_slice(format!("4 0 obj << /Filter /FlateDecode /Length {} >> stream\n", stream.len()).as_bytes());
+    pdf.extend_from_slice(&stream);
+    pdf.extend_from_slice(b"\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
+    pdf
+}
+
+/// #1156 (review): a page whose render skipped content for its limits is not measured, because a
+/// crop to what the partial render shows would hide what it left out. The page keeps its box.
+#[test]
+fn remove_white_margins_leaves_a_page_whose_render_was_cut_short() {
+    let source = pdf_with_content_past_the_budget("0 0 0 rg 50 100 80 60 re f");
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let id = s.open("bomb.pdf", None, Arc::new(source), None).unwrap();
+    let d = s.get(id).unwrap();
+    let shot = pdfcraft_render::PageRenderer::new(d.display.clone(), Default::default()).render(pdfcraft_render::RenderRequest {
+        page: 0,
+        scale: 0.5,
+        ..Default::default()
+    });
+    assert!(shot.warnings.contains(&pdfcraft_render::RenderWarning::ContentTruncated), "the fixture is cut short: {:?}", shot.warnings);
+    assert!(shot.rgba.chunks(4).any(|p| p[0] < 100), "and still shows its rectangle");
+    assert_eq!(d.white_margin_crops(&[0]), [], "so there is no crop for it");
+}
+
 /// #1156: the background job measures the same rectangles as the dialog, and a cancelled one
 /// leaves nothing to apply.
 #[test]

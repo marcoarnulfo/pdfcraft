@@ -320,10 +320,12 @@ impl PdfCraftApp {
             }
             return;
         };
+        // Cancel is only checked between pages: one pressed during the last page still gets its measures back.
+        let cancelled = s.cancel;
         drop(s);
         self.white_margins_run = None;
         self.progress_notice = None;
-        let Some(edit) = result else { return };
+        let Some(edit) = result.filter(|_| !cancelled) else { return };
         // The document was closed meanwhile: nothing to crop, nothing to say.
         let Some(unchanged) = self.session.get(doc).map(|d| d.edit_generation() == generation || Arc::ptr_eq(&d.display, &display)) else { return };
         if !unchanged {
@@ -383,6 +385,33 @@ mod tests {
         let s = h.state();
         assert!(s.white_margins_run.is_none() && s.progress_notice.is_none());
         assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), None, "nothing was cropped");
+    }
+
+    /// #1156 (review): Cancel pressed while the last page is being measured still comes back with
+    /// the measures (the worker only checks between pages): they are not applied.
+    #[test]
+    fn white_margins_cancelled_during_the_last_page_is_not_applied() {
+        let progress = Arc::new(Mutex::new(WhiteMarginsProgress { done: 0, total: 1, ..Default::default() }));
+        let p = progress.clone();
+        let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe(move |_cc| {
+            let mut app = PdfCraftApp::new();
+            app.set_option("language", "en").unwrap();
+            app.open_bytes("notes.txt", None, b"hello".to_vec()).unwrap();
+            let (_, doc) = app.active_ids().unwrap();
+            let d = app.session.get(doc).unwrap();
+            let (generation, display) = (d.edit_generation(), d.display.clone());
+            app.white_margins_run = Some(WhiteMarginsRun { doc, generation, display, progress: p });
+            app
+        });
+        h.run_steps(2);
+        h.get_by_label("Cancel").click();
+        h.run_steps(2);
+        let edit = Edit::RemoveWhiteMargins { which: PageBox::Crop, rects: vec![(0, [10.0, 10.0, 100.0, 100.0])] };
+        progress.lock().unwrap().result = Some(Some(edit));
+        h.run_steps(2);
+        let s = h.state();
+        assert!(s.white_margins_run.is_none() && s.progress_notice.is_none());
+        assert_eq!(s.session.get(s.views[0].id).unwrap().can_undo(), None, "the measures of a cancelled run are dropped");
     }
 
     #[test]
