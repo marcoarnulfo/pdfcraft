@@ -758,3 +758,37 @@ fn ctrl_shift_arrows_open_the_next_and_previous_pdf_in_the_folder() {
     assert_eq!(h.state().toast, None, "typing in a text field runs no command");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The folder is read on a worker (a network drive can stall `read_dir`): the command returns
+/// without opening anything, and the file opens on a later frame.
+#[test]
+fn stepping_through_a_folder_reads_it_off_the_ui_thread() {
+    let dir = std::env::temp_dir().join(format!("pdfcraft-folder-step-worker-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for name in ["a.pdf", "b.pdf"] {
+        std::fs::write(dir.join(name), fixture(1)).unwrap();
+    }
+    let path = |name: &str| dir.join(name).to_string_lossy().into_owned();
+    let mut h = harness();
+    h.state_mut().run_inline = true;
+    h.state_mut().open_path(&path("a.pdf"));
+    h.run_steps(3);
+    h.state_mut().run_inline = false;
+    let shown = |h: &Harness<'static, PdfCraftApp>| {
+        let app = h.state();
+        app.active_ids().and_then(|(_, id)| app.session.get(id)).and_then(|d| d.path.clone())
+    };
+    assert!(h.state_mut().execute("file.open_next_in_folder"));
+    assert!(h.state().folder_step_pending(), "the command only starts the scan; a frame takes its answer");
+    assert_eq!(shown(&h), Some(path("a.pdf")));
+    for _ in 0..200 {
+        h.run_steps(1);
+        if shown(&h) == Some(path("b.pdf")) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(shown(&h), Some(path("b.pdf")), "the worker's answer opens the next file");
+    let _ = std::fs::remove_dir_all(&dir);
+}

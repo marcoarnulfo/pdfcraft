@@ -47,31 +47,88 @@ fn pdf_beside_on_disk(path: &std::path::Path, forward: bool) -> std::io::Result<
     Ok(pdf_beside(&names, &current.to_string_lossy(), forward).map(|name| dir.join(name)))
 }
 
+/// A folder scan on its way: the file the step started from, so a notice can name the folder,
+/// and the worker's answer.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) struct FolderStep {
+    path: String,
+    forward: bool,
+    receiver: std::sync::mpsc::Receiver<std::io::Result<Option<std::path::PathBuf>>>,
+}
+
 impl PdfCraftApp {
+    /// A folder scan is still on its way (File ▸ Open next / previous PDF in folder).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn folder_step_pending(&self) -> bool {
+        self.folder_step.is_some()
+    }
+
     /// Open the PDF after the active document's file in its folder (before it when `forward` is
     /// false). It opens like any other file, in its own tab, so the document shown keeps its tab
-    /// and its unsaved changes; a file already open comes to the front.
+    /// and its unsaved changes; a file already open comes to the front. The folder is read on a
+    /// worker, so a slow network drive never holds the frame (inline in tests, like the opens).
     pub(crate) fn open_pdf_beside(&mut self, forward: bool) {
         #[cfg(not(target_arch = "wasm32"))]
         {
+            if self.folder_step.is_some() {
+                return;
+            }
             let Some(path) = self.active_ids().and_then(|(_, id)| self.session.get(id)).and_then(|d| d.path.clone()) else {
                 self.notify_tr("This document isn't in a folder yet: save it first");
                 return;
             };
-            match pdf_beside_on_disk(std::path::Path::new(&path), forward) {
-                Ok(Some(next)) => {
-                    self.open_path(&next.to_string_lossy());
+            let inline = self.ctx.is_none() || self.run_inline;
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let scan = path.clone();
+            let ctx = self.ctx.clone();
+            let work = move || {
+                let _ = sender.send(pdf_beside_on_disk(std::path::Path::new(&scan), forward));
+                if let Some(ctx) = ctx {
+                    ctx.request_repaint();
                 }
-                Ok(None) if forward => self.notify_tr("This is the last PDF in its folder"),
-                Ok(None) => self.notify_tr("This is the first PDF in its folder"),
-                Err(e) => {
-                    let folder = std::path::Path::new(&path).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
-                    self.notify_fmt("Couldn't read {name}: {e}", &[("name", &folder), ("e", &e.to_string())]);
-                }
+            };
+            if inline {
+                work();
+            } else if let Err(e) = std::thread::Builder::new().name("pdfcraft-folder-step".into()).spawn(work) {
+                let folder = std::path::Path::new(&path).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+                self.notify_fmt("Couldn't read {name}: {e}", &[("name", &folder), ("e", &e.to_string())]);
+                return;
+            }
+            self.folder_step = Some(FolderStep { path, forward, receiver });
+            // A worker's answer waits for the next frame; an inline one is already here.
+            if inline {
+                self.poll_folder_step();
             }
         }
         #[cfg(target_arch = "wasm32")]
         let _ = forward;
+    }
+
+    /// Act on a finished folder scan, if there is one.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn poll_folder_step(&mut self) {
+        let Some(step) = &self.folder_step else { return };
+        let done = match step.receiver.try_recv() {
+            Ok(done) => done,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            // The worker ended without an answer (it panicked): stop waiting for it.
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.folder_step = None;
+                return;
+            }
+        };
+        let Some(FolderStep { path, forward, .. }) = self.folder_step.take() else { return };
+        match done {
+            Ok(Some(next)) => {
+                self.open_path(&next.to_string_lossy());
+            }
+            Ok(None) if forward => self.notify_tr("This is the last PDF in its folder"),
+            Ok(None) => self.notify_tr("This is the first PDF in its folder"),
+            Err(e) => {
+                let folder = std::path::Path::new(&path).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+                self.notify_fmt("Couldn't read {name}: {e}", &[("name", &folder), ("e", &e.to_string())]);
+            }
+        }
     }
 }
 

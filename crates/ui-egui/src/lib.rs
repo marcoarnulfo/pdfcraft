@@ -728,6 +728,9 @@ pub struct PdfCraftApp {
     pending_opens: Vec<PendingOpen>,
     #[cfg(not(target_arch = "wasm32"))]
     next_open_token: u64,
+    /// The folder scan behind File ▸ Open next / previous PDF in folder, while it runs.
+    #[cfg(not(target_arch = "wasm32"))]
+    folder_step: Option<folder_step::FolderStep>,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     open_prepare_gate: Option<std::sync::Arc<open_worker::PrepareGate>>,
     /// Folders pinned to Home, and what they held when last listed.
@@ -1133,6 +1136,8 @@ impl PdfCraftApp {
             pending_opens: Vec::new(),
             #[cfg(not(target_arch = "wasm32"))]
             next_open_token: 0,
+            #[cfg(not(target_arch = "wasm32"))]
+            folder_step: None,
             #[cfg(all(test, not(target_arch = "wasm32")))]
             open_prepare_gate: None,
             pinned: Default::default(),
@@ -3395,6 +3400,7 @@ impl eframe::App for PdfCraftApp {
                 worker.set_context(ctx);
             }
             self.poll_pending_opens();
+            self.poll_folder_step();
         }
         // Chinese wants its own faces before the Japanese ones (one baseline per line).
         let cjk = theme::CjkPreference::for_language(lang.code());
