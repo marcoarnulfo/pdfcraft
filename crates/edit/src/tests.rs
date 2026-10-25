@@ -82,6 +82,7 @@ fn tokens_expand() {
     assert_eq!(expand("<<1 of n>> · <<Page 1>> · <<1/n>>", 2, 5, 0, &c), "2 of 5 · Page 2 · 2/5");
     assert_eq!(expand("<<m/d/yyyy>> <<yyyy-mm-dd>> <<mmmm d, yyyy>>", 1, 1, 0, &c), "10/1/2026 2026-10-01 October 1, 2026");
     assert_eq!(expand("<<yyyy/mm/dd>> <<yyyy/m/d>>", 1, 1, 0, &c), "2026/10/01 2026/10/1");
+    assert_eq!(expand("<<dd.mm.yyyy>> <<d.m.yyyy>> <<dd.mm.yy>> <<d.m.yy>>", 1, 1, 0, &c), "01.10.2026 1.10.2026 01.10.26 1.10.26");
     assert_eq!(expand("<<Bates Number#6#100#ABC#-X>>", 1, 1, 104, &c), "ABC000104-X");
     assert_eq!(expand("keep <<unknown>> and <<unclosed", 1, 1, 0, &c), "keep <<unknown>> and <<unclosed");
     assert_eq!(bates_start("x <<Bates Number#6#100#A#B>>"), Some(100));
@@ -4976,6 +4977,40 @@ fn cropped_image_resizing_moves_private_clips_and_keeps_shared_ones() {
     );
     images::change_image(&mut doc, 0, 0, &images::ImageChange::Transform([0.5, 0.0, 0.0, 0.5, 0.0, 0.0])).unwrap();
     assert_eq!(text::text_lines(&doc, 0).unwrap().len(), 1);
+}
+
+/// Report generators draw each picture as `q re W n cm Do Q` inside a section's clip that the
+/// section's text shares. Resizing the picture scales its own clip with it (the enlarged picture
+/// used to show only through its old box) while the section's clip and text stay put.
+#[test]
+fn resizing_an_image_under_a_shared_clip_moves_its_own_clip() {
+    // The picture's own clip as wide as the picture, and wider (both seen in one report).
+    for clip_width in [61.2, 85.0] {
+        let mut doc = image_page_with(&format!(
+            "q 20 20 560 760 re W n q 162 79 {clip_width} 28.3 re W n 61.2 0 0 28.3 162 79 cm /Im0 Do Q BT /F1 12 Tf 30 50 Td (Section text) Tj ET Q"
+        ));
+        let before = images::page_images(&doc, 0).unwrap()[0].clone();
+        assert!(close(before.visible_rect.unwrap(), [162.0, 79.0, 223.2, 107.3]), "{:?}", before.visible_rect);
+        let caption = text::text_lines(&doc, 0).unwrap();
+        let target = [162.0, 79.0, 284.4, 135.6];
+        let transform = images::rect_to_rect(before.visible_rect.unwrap(), target);
+        images::change_image(&mut doc, 0, 0, &images::ImageChange::Transform(transform)).unwrap();
+        doc = reopen(&doc);
+        let after = images::page_images(&doc, 0).unwrap()[0].clone();
+        let near = |a: [f64; 4], b: [f64; 4]| a.iter().zip(b).all(|(x, y)| (x - y).abs() < 0.05);
+        assert!(near(after.visible_rect.unwrap(), target), "clip {clip_width}: the whole enlarged picture shows, {:?}", after.visible_rect);
+        assert_eq!(after.object, before.object, "pixels are never resampled or replaced");
+        assert_eq!(
+            text::text_lines(&doc, 0).unwrap().iter().map(|l| (&l.text, l.rect, l.baseline())).collect::<Vec<_>>(),
+            caption.iter().map(|l| (&l.text, l.rect, l.baseline())).collect::<Vec<_>>(),
+            "the section's text stays where it was"
+        );
+        // The section's clip is shared, so it still bounds the picture: past it, nothing shows.
+        let past = images::rect_to_rect(after.visible_rect.unwrap(), [500.0, 79.0, 700.0, 135.6]);
+        images::change_image(&mut doc, 0, 0, &images::ImageChange::Transform(past)).unwrap();
+        let clipped = images::page_images(&reopen(&doc), 0).unwrap()[0].visible_rect.unwrap();
+        assert!(clipped[2] <= 580.05, "the section's clip stays in force: {clipped:?}");
+    }
 }
 
 #[test]

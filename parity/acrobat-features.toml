@@ -2153,8 +2153,8 @@ milestone = "M7"
 status = "shipped"
 commands = ["edit.edit_text"]
 tools = ["image_edit", "image_hit"]
-evidence = ["crates/edit/src/tests.rs::private_image_crop_with_intervening_state_resizes_across_streams", "crates/automation/tests/it/automation.rs::private_crops_with_nested_state_resize_save_reopen_through_tools", "crates/edit/src/tests.rs::form_artwork_edits_only_the_selected_placement", "crates/ui-egui/tests/it/editing.rs::editing_existing_form_artwork_on_the_page", "crates/automation/tests/it/automation.rs::editing_form_artwork_through_tools", "crates/edit/src/tests.rs::page_images_move_turn_replace_and_delete", "crates/ui-egui/tests/it/editing.rs::editing_existing_images_on_the_page", "crates/automation/tests/it/automation.rs::editing_page_images_through_tools", "crates/edit/src/tests.rs::curved_image_clips_have_analytic_bounds_and_holes_do_not_capture_points", "crates/edit/src/tests.rs::cropped_image_resizing_moves_private_clips_and_keeps_shared_ones", "crates/ui-egui/tests/it/editing.rs::cropped_image_corner_resize_keeps_opposite_corner_and_scales_crop", "crates/edit/src/tests.rs::image_selection_bounds_respect_clips_and_restore_graphics_state", "crates/ui-egui/tests/it/editing.rs::cropped_images_do_not_intercept_text_and_stay_inside_each_page", "crates/automation/tests/it/automation.rs::clipped_image_bounds_and_text_edit_save_reopen_through_tools"]
-notes = "existing raster images and grouped Form artwork: select, drag to move, drag a corner to resize keeping proportions; Delete removes one placement. Forms include their nested content as a group; individual internal elements and inline images are not supported. See docs/editing-images.md; added images too Since #1116: raster images and grouped Forms move/resize/turn as placements; selected grips own the gesture and opposite anchor, with no PDF writes during movement. Curved path frames use analytic Bezier extrema and hit testing evaluates actual nonzero/even-odd fill rules, excluding holes; intersections can retain a loose frame. Selection and resize use the visible (clipped) frame; exclusive image clips move with their pixels across nested states, intervening operators and content streams; shared clips stay fixed. Inline images and Form internals remain unsupported; see docs/editing-images.md"
+evidence = ["crates/edit/src/tests.rs::private_image_crop_with_intervening_state_resizes_across_streams", "crates/automation/tests/it/automation.rs::private_crops_with_nested_state_resize_save_reopen_through_tools", "crates/edit/src/tests.rs::form_artwork_edits_only_the_selected_placement", "crates/ui-egui/tests/it/editing.rs::editing_existing_form_artwork_on_the_page", "crates/automation/tests/it/automation.rs::editing_form_artwork_through_tools", "crates/edit/src/tests.rs::page_images_move_turn_replace_and_delete", "crates/ui-egui/tests/it/editing.rs::editing_existing_images_on_the_page", "crates/automation/tests/it/automation.rs::editing_page_images_through_tools", "crates/edit/src/tests.rs::curved_image_clips_have_analytic_bounds_and_holes_do_not_capture_points", "crates/edit/src/tests.rs::cropped_image_resizing_moves_private_clips_and_keeps_shared_ones", "crates/ui-egui/tests/it/editing.rs::cropped_image_corner_resize_keeps_opposite_corner_and_scales_crop", "crates/edit/src/tests.rs::image_selection_bounds_respect_clips_and_restore_graphics_state", "crates/ui-egui/tests/it/editing.rs::cropped_images_do_not_intercept_text_and_stay_inside_each_page", "crates/automation/tests/it/automation.rs::clipped_image_bounds_and_text_edit_save_reopen_through_tools", "crates/edit/src/tests.rs::resizing_an_image_under_a_shared_clip_moves_its_own_clip"]
+notes = "existing raster images and grouped Form artwork: select, drag to move, drag a corner to resize keeping proportions; Delete removes one placement. Forms include their nested content as a group; individual internal elements and inline images are not supported. See docs/editing-images.md; added images too Since #1116: raster images and grouped Forms move/resize/turn as placements; selected grips own the gesture and opposite anchor, with no PDF writes during movement. Curved path frames use analytic Bezier extrema and hit testing evaluates actual nonzero/even-odd fill rules, excluding holes; intersections can retain a loose frame. Selection and resize use the visible (clipped) frame; exclusive image clips move with their pixels across nested states, intervening operators and content streams, also inside a clip the picture shares with other content (its own clip scales, the shared one stays); shared clips stay fixed. Inline images and Form internals remain unsupported; see docs/editing-images.md"
 
 [[feature]]
 id = "edit.image-extract"
@@ -2448,7 +2448,7 @@ status = "shipped"
 commands = ["edit.header_footer"]
 tools = ["doc_header_footer"]
 evidence = ["crates/edit/src/tests.rs::tokens_expand", "crates/engine/src/tests.rs::headers_footers_watermarks_and_backgrounds_show_update_and_remove"]
-notes = "<<1>>, <<n>>, <<1 of n>>, <<Page 1 of n>>, dates, Bates"
+notes = "<<1>>, <<n>>, <<1 of n>>, <<Page 1 of n>>, dates (US, ISO, day-first with slashes and the dotted <<dd.mm.yyyy>>, <<d.m.yyyy>>, <<dd.mm.yy>>, <<d.m.yy>>), Bates. Month names are English only"
 
 [[feature]]
 id = "edit.header-footer-ranges"
@@ -3471,8 +3471,8 @@ milestone = "M3"
 status = "shipped"
 commands = ["file.properties"]
 tools = ["doc_info"]
-evidence = ["crates/ui-egui/tests/it/editing.rs::document_properties_edit_is_one_undoable_step", "crates/ui-egui/tests/it/editing.rs::cancelling_properties_discards_the_draft", "crates/organize/src/tests.rs::document_info_falls_back_to_the_xmp_packet", "crates/engine/src/tests.rs::document_information_stated_only_in_xmp_is_shown"]
-notes = "Title, Author, Subject and Keywords (and Creator, Producer in doc_info) come from /Info, else from the XMP packet (dc:title, dc:creator, dc:description, pdf:Keywords, xmp:CreatorTool, pdf:Producer) for files that state them only there; edits write both. Missing: a UTF-16 XMP packet isn't read, and /Info kept only in an older revision's trailer isn't looked up"
+evidence = ["crates/ui-egui/tests/it/editing.rs::document_properties_edit_is_one_undoable_step", "crates/ui-egui/tests/it/editing.rs::cancelling_properties_discards_the_draft", "crates/organize/src/tests.rs::document_info_falls_back_to_the_xmp_packet", "crates/engine/src/tests.rs::document_information_stated_only_in_xmp_is_shown", "crates/ui-egui/tests/it/dialog_chrome.rs::document_properties_values_line_up_and_long_fields_wrap", "crates/ui-egui/tests/it/dialog_chrome.rs::space_audit_tab_measures_the_file_and_stays_in_the_card"]
+notes = "Description, Initial View, Security, Fonts, Custom (organize.custom-properties) and Advanced, plus a Space Audit tab Acrobat does not have (its audit is only in the PDF Optimizer); the audit runs when the tab opens and again after an edit. Title, Author, Subject and Keywords (and Creator, Producer in doc_info) come from /Info, else from the XMP packet (dc:title, dc:creator, dc:description, pdf:Keywords, xmp:CreatorTool, pdf:Producer) for files that state them only there; edits write both. Missing: a UTF-16 XMP packet isn't read, and /Info kept only in an older revision's trailer isn't looked up"
 
 [[feature]]
 id = "organize.edit-metadata"
@@ -3583,8 +3583,8 @@ milestone = "M3"
 status = "shipped"
 commands = ["comment.list"]
 tools = ["comment_list"]
-evidence = ["crates/ui-egui/tests/it/ui.rs::opening_a_pdf_shows_comments_and_bookmarks", "crates/ui-egui/tests/it/comments.rs::the_panel_posts_comments_and_replies", "crates/ui-egui/tests/it/comments.rs::page_groups_collapse_and_expand"]
-notes = "cards grouped by page with replies, status badges, selection, reply box and an Add a comment box; page groups fold and unfold from their chevron or with Collapse/Expand all pages in the panel's \"…\" menu (a comment selected on a folded page opens its group). Groups by author, type or colour don't fold yet"
+evidence = ["crates/ui-egui/tests/it/ui.rs::opening_a_pdf_shows_comments_and_bookmarks", "crates/ui-egui/tests/it/comments.rs::the_panel_posts_comments_and_replies", "crates/ui-egui/tests/it/comments.rs::page_groups_collapse_and_expand", "crates/ui-egui/tests/it/comments.rs::replies_follow_irt_references_when_names_repeat_on_every_page", "crates/engine/src/tests.rs::replies_thread_by_reference_when_names_repeat_across_pages", "crates/automation/tests/it/automation.rs::replies_thread_by_reference_when_ids_repeat_across_pages"]
+notes = "cards grouped by page with replies (threaded by the `/IRT` reference, so files whose `/NM` repeats per page, as PyMuPDF writes them, thread correctly; the header counts comments without replies, as Acrobat does), status badges, selection, reply box and an Add a comment box; page groups fold and unfold from their chevron or with Collapse/Expand all pages in the panel's \"…\" menu (a comment selected on a folded page opens its group). Groups by author, type or colour don't fold yet"
 
 [[feature]]
 id = "comment.appearance-generation"
@@ -3933,6 +3933,18 @@ commands = ["comment.list"]
 tools = []
 evidence = ["crates/ui-egui/tests/it/comments.rs::make_current_properties_default", "crates/ui-egui/tests/it/comments.rs::properties_dialog_makes_the_strikethrough_colour_default"]
 notes = "colour, opacity and line width become the tool's defaults (canvas and Comments panel menus, and Acrobat's Make Properties Default box in Comment Properties, applied on OK with the edited look) and survive a restart: the per-tool styles are persisted with the settings and restored through their clamping setters (#340)"
+
+[[feature]]
+id = "comment.keep-tool-selected"
+title = "Keep annotation tools selected between uses and restarts"
+area = "E"
+tier = "P2"
+milestone = "M14"
+status = "shipped"
+commands = ["comment.line"]
+tools = []
+evidence = ["crates/ui-egui/tests/it/comment_pin.rs::pin_from_quick_bar_survives_restart_and_unpinning", "crates/ui-egui/tests/it/comment_pin.rs::legacy_settings_keep_the_default_and_other_preferences", "crates/ui-egui/tests/it/comment_pin.rs::malformed_pin_values_preserve_the_current_choice", "crates/ui-egui/tests/it/control.rs::comment_pin_is_reported_and_persistent"]
+notes = "The annotation quick bar's shared pin survives restarts as a boolean setting (#4253); unpinning is remembered too. Old settings default to one-shot use, and malformed values keep the current choice. UI-only preference, reachable through opt-in ui.set key=comment-tool-pinned and reported by ui.state.comment_tool_pinned. Startup uses Select; the shared pin applies when an annotation tool is picked. Independent per-tool pins and restoring the active tool are outside this preference."
 
 [[feature]]
 id = "comment.author-identity"
@@ -4451,8 +4463,8 @@ milestone = "M3"
 status = "shipped"
 commands = []
 tools = []
-evidence = ["crates/ui-egui/tests/it/view.rs::highlight_fields_tints_the_field_area", "crates/ui-egui/tests/it/view.rs::required_radio_buttons_get_a_round_red_border", "crates/ui-egui/tests/it/view.rs::field_highlighting_is_on_by_default_and_remembered", "crates/ui-egui/tests/it/view.rs::stored_field_highlight_choice_wins_over_the_default", "crates/ui-egui/tests/it/view.rs::highlight_fields_leaves_read_only_fields_alone", "crates/ui-egui/tests/it/editing.rs::a_secured_form_shows_its_form_notice_and_its_security"]
-notes = "only fields that can be filled are marked (a read-only field is left as drawn, so a form's locked boxes don't look fillable); offered on secured forms too; on by default for new settings (a stored choice is kept) and remembered for the next document and session; toggled from the form bar and from Preferences > Appearance, where it sets the default for documents opened afterwards; required fields get a red border (round for radio buttons); the tint is drawn over the field, where Acrobat paints the highlight colour behind it"
+evidence = ["crates/ui-egui/tests/it/view.rs::highlight_fields_tints_the_field_area", "crates/ui-egui/tests/it/view.rs::required_radio_buttons_get_a_round_red_border", "crates/ui-egui/tests/it/view.rs::field_highlighting_is_on_by_default_and_remembered", "crates/ui-egui/tests/it/view.rs::stored_field_highlight_choice_wins_over_the_default", "crates/ui-egui/tests/it/view.rs::highlight_fields_leaves_read_only_fields_alone", "crates/ui-egui/tests/it/editing.rs::a_secured_form_shows_its_form_notice_and_its_security", "crates/ui-egui/tests/it/view.rs::round_check_boxes_get_a_round_highlight"]
+notes = "only fields that can be filled are marked (a read-only field is left as drawn, so a form's locked boxes don't look fillable); offered on secured forms too; on by default for new settings (a stored choice is kept) and remembered for the next document and session; toggled from the form bar and from Preferences > Appearance, where it sets the default for documents opened afterwards; required fields get a red border (the tint and border round for radio buttons and for check boxes laid out for a round XFA check button); the tint is drawn over the field, where Acrobat paints the highlight colour behind it"
 
 [[feature]]
 id = "form.field-appearance-display"
@@ -4499,8 +4511,8 @@ milestone = "M6"
 status = "shipped"
 commands = ["form.fields"]
 tools = ["form_fill"]
-evidence = ["crates/ui-egui/tests/it/forms.rs::check_boxes_radios_and_choices", "crates/forms/src/tests.rs::choices_accept_exports_or_display_text"]
-notes = "combo and list boxes, multi-select lists; editable combo boxes accept free text"
+evidence = ["crates/ui-egui/tests/it/forms.rs::check_boxes_radios_and_choices", "crates/forms/src/tests.rs::choices_accept_exports_or_display_text", "crates/ui-egui/tests/it/forms.rs::an_editable_combo_box_takes_a_typed_value", "crates/ui-egui/tests/it/forms.rs::a_combo_box_without_edit_takes_no_typing", "crates/automation/tests/it/automation.rs::form_fill_takes_free_text_only_in_an_editable_combo_box"]
+notes = "combo and list boxes, multi-select lists; an editable combo box (Edit flag) has a text box over the field as well as its list, and takes typed text on the page and through form_fill; a combo box without Edit takes only its options. No type-ahead or spell check in the typed box"
 
 [[feature]]
 id = "form.push-buttons"
@@ -7661,7 +7673,7 @@ status = "shipped"
 commands = ["optimize.advanced"]
 tools = ["doc_audit_space"]
 evidence = ["crates/optimize/tests/optimize.rs::space_audit_shares_the_file_out_by_kind", "crates/optimize/tests/optimize.rs::space_audit_counts_what_fields_and_comments_draw_with_by_kind", "crates/optimize/tests/optimize.rs::space_audit_survives_deeply_nested_forms", "crates/automation/tests/it/automation.rs::auditing_space_through_tools", "crates/ui-egui/tests/it/viewer.rs::optimizer_audits_space_usage", "crates/ui-egui/tests/it/viewer.rs::space_audit_numbers_line_up_under_their_headers"]
-notes = "PDF Optimizer ▸ Audit space usage: what the file's bytes are spent on now (not what optimizing would save), in 16 categories (images, content streams, fonts, X Object forms, structure, bookmarks, thumbnails, comments, forms, named destinations, colour spaces, shadings, patterns, graphics states, embedded files, overhead) with bytes and percentages. Resources are counted by kind wherever they are used, so the fonts and images form fields and comments draw with count as fonts and images. Still missing: sizes are each object as it would be written uncompressed, so objects packed in compressed object streams count larger than they take on disk (overhead, the rest of the file, shrinks to match)"
+notes = "PDF Optimizer ▸ Audit space usage, and Document Properties ▸ Space Audit: what the file's bytes are spent on now (not what optimizing would save), in 16 categories (images, content streams, fonts, X Object forms, structure, bookmarks, thumbnails, comments, forms, named destinations, colour spaces, shadings, patterns, graphics states, embedded files, overhead) with bytes and percentages. Resources are counted by kind wherever they are used, so the fonts and images form fields and comments draw with count as fonts and images. Still missing: sizes are each object as it would be written uncompressed, so objects packed in compressed object streams count larger than they take on disk (overhead, the rest of the file, shrinks to match)"
 
 [[feature]]
 id = "optimize.optimizer-presets"
@@ -8472,8 +8484,8 @@ milestone = "M3"
 status = "partial"
 commands = []
 tools = []
-evidence = ["crates/ui-egui/tests/it/control.rs::inspect_and_click_by_label_and_id"]
-notes = "AccessKit labels on all custom widgets; full audit in M14.3"
+evidence = ["crates/ui-egui/tests/it/control.rs::inspect_and_click_by_label_and_id", "crates/ui-egui/tests/it/viewer.rs::the_accessible_window_has_the_window_title_as_its_name"]
+notes = "AccessKit labels on all custom widgets; the accessible window is named with the window title and follows it (#4614); full audit in M14.3"
 
 [[feature]]
 id = "a11y.keyboard-only"
