@@ -1953,3 +1953,15 @@ fn an_empty_field_in_xfdf_clears_the_field_it_is_imported_into() {
         assert_eq!(values(&dst), values(&src), "{format}: {report:?}: {}", String::from_utf8_lossy(&data));
     }
 }
+
+/// A leaf holding only `<value-richtext>` is not read by the import, so it must leave the field
+/// as it was rather than clear it like an empty `<field>`.
+#[test]
+fn a_richtext_only_field_in_xfdf_leaves_the_field_alone() {
+    let data = br#"<?xml version="1.0" encoding="UTF-8"?>
+<xfdf xmlns="http://ns.adobe.com/xfdf/"><fields><field name="Name"><value-richtext><body xmlns="http://www.w3.org/1999/xhtml"><p>Bo</p></body></value-richtext></field></fields></xfdf>"#;
+    let mut dst = one_field();
+    set_value(&mut dst, "Name", &FieldValue::Text("Ada".into())).unwrap();
+    let report = import(&mut dst, data);
+    assert_eq!(values(&dst), vec![("Name".to_string(), vec!["Ada".to_string()])], "{report:?}");
+}
