@@ -180,23 +180,16 @@ impl PdfCraftApp {
         }
     }
 
-    /// Edit text & images: ⌘C / Ctrl+C copies the selected image in its original format, and
-    /// ⌘V / Ctrl+V pastes the last copied picture onto the current page. Only PdfCraft's own copy
-    /// is pasted: the system clipboard may hold a picture from elsewhere, which this leaves alone.
+    /// Edit text & images: ⌘C / Ctrl+C copies the selected image in its original format. ⌘V
+    /// pastes it through [`Self::paste_image_key`], the one paste shortcut on the page.
     pub(crate) fn image_edit_keys(&mut self, i: usize, ctx: &egui::Context) {
         let Some(view) = self.views.get(i) else { return };
         if self.quick_tool != crate::QuickTool::EditText || view.organize || self.modal_open() || ctx.egui_wants_keyboard_input() {
             return;
         }
-        let (copy, paste) = ctx
-            .input(|inp| (inp.events.iter().any(|e| matches!(e, egui::Event::Copy)), inp.events.iter().any(|e| matches!(e, egui::Event::Paste(_)))));
-        let selected = view.image_selection.as_ref().map(|s| (s.page, s.index));
-        let page = view.current;
-        if copy && let Some((page, index)) = selected {
+        let copy = ctx.input(|inp| inp.events.iter().any(|e| matches!(e, egui::Event::Copy)));
+        if copy && let Some((page, index)) = view.image_selection.as_ref().map(|s| (s.page, s.index)) {
             self.copy_page_image_file(page, index);
-        }
-        if paste && self.copied_image.is_some() {
-            self.paste_image(page);
         }
     }
 

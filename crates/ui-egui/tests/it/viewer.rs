@@ -1835,12 +1835,25 @@ fn right_click_on_a_picture_copies_it_at_full_size() {
 /// document is never touched, whatever is undone or redone in the target.
 #[test]
 fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
+    use pdfcraft_ui_egui::Clip;
     let (px, mut h) = picture_harness();
     let blank = pdfcraft_engine::Session::new().create_blank(300.0, 400.0, 1).unwrap();
     h.state_mut().open_bytes("blank.pdf", None, blank.to_vec()).unwrap();
     h.run_steps(4);
     let (source, target) = (h.state().views[0].id, h.state().views[1].id);
     let source_bytes = h.state().session.get(source).unwrap().bytes.clone();
+    let pasted = |h: &Harness<'static, PdfCraftApp>| h.state().session.get(target).unwrap().added().len();
+    // With only a picture or a file on the clipboard, egui-winit sends no Paste event and
+    // swallows the press: the release of V is all that arrives (see #2506).
+    let paste_key = |h: &mut Harness<'static, PdfCraftApp>| {
+        h.event(egui::Event::Key { key: egui::Key::V, physical_key: None, pressed: false, repeat: false, modifiers: egui::Modifiers::COMMAND });
+        h.run_steps(2);
+    };
+    // Nothing copied yet and nothing on the clipboard: ⌘V does nothing.
+    h.state_mut().active = Some(1);
+    h.run_steps(2);
+    paste_key(&mut h);
+    assert_eq!(pasted(&h), 0);
     h.state_mut().active = Some(0);
     h.run_steps(2);
     assert!(h.state_mut().execute("edit.edit_text"));
@@ -1855,11 +1868,10 @@ fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
     h.event(egui::Event::Copy);
     h.run_steps(2);
 
+    // Copy Image in Original Format leaves a file on the system clipboard, no picture to read.
     h.state_mut().active = Some(1);
     h.run_steps(2);
-    h.event(egui::Event::Paste(String::new()));
-    h.run_steps(2);
-    let pasted = |h: &Harness<'static, PdfCraftApp>| h.state().session.get(target).unwrap().added().len();
+    paste_key(&mut h);
     assert_eq!(pasted(&h), 1, "⌘V pastes the picture into the other document");
     let (w, hgt, rgba) = h.state().session.get(target).unwrap().page_image_rgba(0, 0).unwrap();
     assert_eq!((w, hgt, rgba), (40, 30, px.into_raw()), "the picture itself, at full size");
@@ -1868,6 +1880,12 @@ fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
         d.bytes == source_bytes && !d.dirty && d.can_undo().is_none()
     };
     assert!(untouched(&h));
+    // Text copied since then is what ⌘V pastes, not the older picture.
+    h.state_mut().clipboard_override = Some(Clip::Text("hello".into()));
+    h.event(egui::Event::Paste("hello".into()));
+    paste_key(&mut h);
+    assert_eq!(pasted(&h), 1, "a clipboard with text doesn't paste the picture");
+    h.state_mut().clipboard_override = None;
     assert!(h.state_mut().execute("edit.undo"));
     h.run_steps(2);
     assert_eq!(pasted(&h), 0);

@@ -914,7 +914,9 @@ impl crate::PdfCraftApp {
     }
 
     /// ⌘V / Ctrl+V with a picture on the system clipboard (a screenshot, a picture copied in a
-    /// browser) places it on the current page, as Add Image does.
+    /// browser) places it on the current page, as Add Image does. With neither a picture nor text
+    /// there (Copy Image in Original Format leaves only a file), the picture last copied inside
+    /// PdfCraft is pasted instead.
     /// Organize Pages keeps ⌘V for pages, Prepare Form for fields, and text fields for text.
     pub(crate) fn paste_image_key(&mut self, i: usize, ctx: &egui::Context, pasted: bool) {
         let free = self.dialog.is_none() && !self.palette_open && !ctx.egui_wants_keyboard_input();
@@ -922,16 +924,21 @@ impl crate::PdfCraftApp {
         if !pasted || !free || view.organize || view.forms.focus.is_some() || self.is_preparing() {
             return;
         }
+        let page = view.current;
         let clip = match self.clipboard_override.clone() {
             Some(c) => Some(c),
             #[cfg(not(target_arch = "wasm32"))]
             None if self.system_clipboard => crate::create_ui::read_clipboard(),
             None => None,
         };
-        let Some(crate::create_ui::Clip::Image { width, height, rgba }) = clip else { return };
-        match crate::create_ui::png_from_rgba(width, height, &rgba) {
-            Ok(png) => self.add_image("Pasted image.png".into(), png),
-            Err(e) => self.notify_fmt("Couldn't read {name}: {e}", &[("name", tl!("Clipboard")), ("e", &e)]),
+        match clip {
+            Some(crate::create_ui::Clip::Image { width, height, rgba }) => match crate::create_ui::png_from_rgba(width, height, &rgba) {
+                Ok(png) => self.add_image("Pasted image.png".into(), png),
+                Err(e) => self.notify_fmt("Couldn't read {name}: {e}", &[("name", tl!("Clipboard")), ("e", &e)]),
+            },
+            // Text copied since is what ⌘V means, not an older picture.
+            Some(crate::create_ui::Clip::Text(_)) => {}
+            None => self.paste_image(page),
         }
     }
 }
