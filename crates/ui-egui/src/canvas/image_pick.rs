@@ -119,7 +119,13 @@ fn is_copied_image_name(name: &str) -> bool {
 #[cfg(not(target_arch = "wasm32"))]
 fn is_own_copy(files: &[std::path::PathBuf], dir: &std::path::Path, name: &str) -> bool {
     let [file] = files else { return false };
-    is_copied_image_name(name) && file.parent() == Some(dir) && file.file_name().and_then(|n| n.to_str()) == Some(name)
+    // arboard puts the resolved path on the clipboard (links, and on Windows junctions and case),
+    // so the folders are compared resolved, or as they are when either can't be resolved.
+    let same_dir = match (file.parent().and_then(|p| p.canonicalize().ok()), dir.canonicalize().ok()) {
+        (Some(a), Some(b)) => a == b,
+        _ => file.parent() == Some(dir),
+    };
+    is_copied_image_name(name) && same_dir && file.file_name().and_then(|n| n.to_str()) == Some(name)
 }
 
 /// Makes `dir` (a real folder, not a link, owned by us and private to us on Unix), removes the
@@ -304,6 +310,24 @@ mod tests {
         assert!(!is_copied_image_name("Report p1 img2.pdf"));
         assert!(!is_copied_image_name(" p1 img2.png"));
         assert!(!is_copied_image_name("Report px img2.png"));
+    }
+
+    /// arboard puts the resolved path on the clipboard, so a clipboard folder reached through a
+    /// link (a home folder behind one, `/tmp` on macOS) still matches its copy.
+    #[test]
+    #[cfg(unix)]
+    fn the_copy_is_recognised_through_a_linked_clipboard_folder() {
+        let root = std::env::temp_dir().join(format!("pdfcraft-clipboard-link-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let real = root.join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = root.join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let name = "Report p1 img2.jpg";
+        std::fs::write(real.join(name), b"x").unwrap();
+        let on_clipboard = real.canonicalize().unwrap().join(name);
+        assert!(is_own_copy(&[on_clipboard], &link, name));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

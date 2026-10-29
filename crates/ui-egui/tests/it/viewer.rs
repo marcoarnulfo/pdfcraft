@@ -1872,7 +1872,8 @@ fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
     // ⌘V doesn't bring back the older picture.
     h.state_mut().active = Some(1);
     h.run_steps(2);
-    h.state_mut().clipboard_files_override = Some(vec![std::path::PathBuf::from("/elsewhere/scan p1 img1.png")]);
+    let name = h.state().copied_image.as_ref().map(|(name, _)| name.clone()).expect("a copied picture");
+    h.state_mut().clipboard_files_override = Some(vec![std::path::Path::new("/elsewhere").join(&name)]);
     paste_key(&mut h);
     assert_eq!(pasted(&h), 0, "a file copied elsewhere isn't PdfCraft's picture");
     h.state_mut().clipboard_files_override = Some(Vec::new());
@@ -1884,7 +1885,6 @@ fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
     paste_key(&mut h);
     assert_eq!(pasted(&h), 0, "another copy's file isn't this picture");
     // Copy Image in Original Format leaves its file on the system clipboard, no picture to read.
-    let name = h.state().copied_image.as_ref().map(|(name, _)| name.clone()).expect("a copied picture");
     h.state_mut().clipboard_files_override = Some(vec![folder.join(name)]);
     paste_key(&mut h);
     assert_eq!(pasted(&h), 1, "⌘V pastes the picture into the other document");
