@@ -530,6 +530,9 @@ pub struct PdfCraftApp {
     pub clipboard_override: Option<create_ui::Clip>,
     /// The files ⌘V finds on the clipboard instead of the system clipboard's (tests).
     pub clipboard_files_override: Option<Vec<std::path::PathBuf>>,
+    /// Where ⌘V looks for the file Copy Image in Original Format wrote, instead of the clipboard
+    /// folder (tests).
+    pub clipboard_folder_override: Option<std::path::PathBuf>,
     /// V is down as a plain key press (see [`Self::paste_key_released`]).
     v_pressed: bool,
     /// Attach file: the file to attach instead of asking (tests, automation).

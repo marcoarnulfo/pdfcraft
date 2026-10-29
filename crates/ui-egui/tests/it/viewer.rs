@@ -1872,23 +1872,40 @@ fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
     // ⌘V doesn't bring back the older picture.
     h.state_mut().active = Some(1);
     h.run_steps(2);
-    let name = h.state().copied_image.as_ref().map(|(name, _)| name.clone()).expect("a copied picture");
-    h.state_mut().clipboard_files_override = Some(vec![std::path::Path::new("/elsewhere").join(&name)]);
+    let (name, bytes) = h.state().copied_image.clone().expect("a copied picture");
+    // The harness has no system clipboard, so the copy wrote no file: the files ⌘V finds are
+    // written here, each with the copy's own bytes unless the step says otherwise.
+    let root = std::env::temp_dir().join(format!("pdfcraft-paste-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let (folder, elsewhere) = (root.join("Clipboard"), root.join("elsewhere"));
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    for path in [folder.join(&name), elsewhere.join(&name), folder.join("other p1 img1.png")] {
+        std::fs::write(path, bytes.as_slice()).unwrap();
+    }
+    h.state_mut().clipboard_folder_override = Some(folder.clone());
+    h.state_mut().clipboard_files_override = Some(vec![elsewhere.join(&name)]);
     paste_key(&mut h);
     assert_eq!(pasted(&h), 0, "a file copied elsewhere isn't PdfCraft's picture");
     h.state_mut().clipboard_files_override = Some(Vec::new());
     paste_key(&mut h);
     assert_eq!(pasted(&h), 0, "an empty clipboard doesn't paste the older picture");
     // Another PdfCraft window copied a picture of its own since: its file, in the same folder.
-    let folder = PdfCraftApp::copied_image_folder().expect("a clipboard folder");
     h.state_mut().clipboard_files_override = Some(vec![folder.join("other p1 img1.png")]);
     paste_key(&mut h);
     assert_eq!(pasted(&h), 0, "another copy's file isn't this picture");
+    // The same, from a document with the same name: the file is ours by name, not by content.
+    std::fs::write(folder.join(&name), b"another picture").unwrap();
+    h.state_mut().clipboard_files_override = Some(vec![folder.join(&name)]);
+    paste_key(&mut h);
+    assert_eq!(pasted(&h), 0, "another window's copy under the same name isn't this picture");
+    std::fs::write(folder.join(&name), bytes.as_slice()).unwrap();
     // Copy Image in Original Format leaves its file on the system clipboard, no picture to read.
-    h.state_mut().clipboard_files_override = Some(vec![folder.join(name)]);
+    h.state_mut().clipboard_files_override = Some(vec![folder.join(&name)]);
     paste_key(&mut h);
     assert_eq!(pasted(&h), 1, "⌘V pastes the picture into the other document");
     h.state_mut().clipboard_files_override = None;
+    let _ = std::fs::remove_dir_all(&root);
     let (w, hgt, rgba) = h.state().session.get(target).unwrap().page_image_rgba(0, 0).unwrap();
     assert_eq!((w, hgt, rgba), (40, 30, px.into_raw()), "the picture itself, at full size");
     let untouched = |h: &Harness<'static, PdfCraftApp>| {
