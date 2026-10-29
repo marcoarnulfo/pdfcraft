@@ -113,12 +113,13 @@ fn is_copied_image_name(name: &str) -> bool {
     !stem.is_empty() && digits(index) && digits(page)
 }
 
-/// Whether `files` (the clipboard's file list) is the one file Copy Image in Original Format
-/// wrote into `dir`, and not files copied since in another application.
+/// Whether `files` (the clipboard's file list) is the one file `name` Copy Image in Original
+/// Format wrote into `dir`, and not files copied since in another application or in another
+/// PdfCraft window (whose copy replaces ours in the same folder).
 #[cfg(not(target_arch = "wasm32"))]
-fn is_own_copy(files: &[std::path::PathBuf], dir: &std::path::Path) -> bool {
+fn is_own_copy(files: &[std::path::PathBuf], dir: &std::path::Path, name: &str) -> bool {
     let [file] = files else { return false };
-    file.parent() == Some(dir) && file.file_name().and_then(|n| n.to_str()).is_some_and(is_copied_image_name)
+    is_copied_image_name(name) && file.parent() == Some(dir) && file.file_name().and_then(|n| n.to_str()) == Some(name)
 }
 
 /// Makes `dir` (a real folder, not a link, owned by us and private to us on Unix), removes the
@@ -238,6 +239,12 @@ impl PdfCraftApp {
         arboard::Clipboard::new().and_then(|mut c| c.set().file_list(&[path])).map_err(|e| e.to_string())
     }
 
+    /// The folder Copy Image in Original Format writes its file into (tests, automation).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn copied_image_folder() -> Option<std::path::PathBuf> {
+        clipboard_dir()
+    }
+
     /// Whether the system clipboard still holds the file the last Copy Image in Original Format
     /// put there, so ⌘V may paste PdfCraft's own copy. Without the system clipboard (tests) that
     /// copy is the clipboard's.
@@ -254,7 +261,10 @@ impl PdfCraftApp {
             None => return false,
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let own = clipboard_dir().is_some_and(|dir| is_own_copy(&files, &dir));
+        let own = match (&self.copied_image, clipboard_dir()) {
+            (Some((name, _)), Some(dir)) => is_own_copy(&files, &dir, name),
+            _ => false,
+        };
         #[cfg(target_arch = "wasm32")]
         let own = {
             let _ = files;
@@ -300,11 +310,13 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     fn only_the_file_copy_image_wrote_counts_as_its_copy() {
         let dir = std::path::Path::new("/cache/PdfCraft/Clipboard");
-        assert!(is_own_copy(&[dir.join("Report p1 img2.jpg")], dir));
-        assert!(!is_own_copy(&[], dir), "nothing on the clipboard");
-        assert!(!is_own_copy(&[std::path::PathBuf::from("/elsewhere/Report p1 img2.jpg")], dir), "another folder");
-        assert!(!is_own_copy(&[dir.join("notes.txt")], dir), "not a name Copy Image writes");
-        assert!(!is_own_copy(&[dir.join("Report p1 img2.jpg"), dir.join("Report p1 img3.jpg")], dir), "more than one file");
+        let name = "Report p1 img2.jpg";
+        assert!(is_own_copy(&[dir.join(name)], dir, name));
+        assert!(!is_own_copy(&[], dir, name), "nothing on the clipboard");
+        assert!(!is_own_copy(&[std::path::PathBuf::from("/elsewhere/Report p1 img2.jpg")], dir, name), "another folder");
+        assert!(!is_own_copy(&[dir.join("Other p1 img1.png")], dir, name), "another window's copy");
+        assert!(!is_own_copy(&[dir.join("notes.txt")], dir, "notes.txt"), "not a name Copy Image writes");
+        assert!(!is_own_copy(&[dir.join(name), dir.join("Report p1 img3.jpg")], dir, name), "more than one file");
     }
 
     #[test]

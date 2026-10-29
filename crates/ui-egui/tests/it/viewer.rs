@@ -1878,11 +1878,17 @@ fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
     h.state_mut().clipboard_files_override = Some(Vec::new());
     paste_key(&mut h);
     assert_eq!(pasted(&h), 0, "an empty clipboard doesn't paste the older picture");
-    // Copy Image in Original Format leaves a file on the system clipboard, no picture to read;
-    // without the system clipboard here, PdfCraft's copy is the clipboard's.
-    h.state_mut().clipboard_files_override = None;
+    // Another PdfCraft window copied a picture of its own since: its file, in the same folder.
+    let folder = PdfCraftApp::copied_image_folder().expect("a clipboard folder");
+    h.state_mut().clipboard_files_override = Some(vec![folder.join("other p1 img1.png")]);
+    paste_key(&mut h);
+    assert_eq!(pasted(&h), 0, "another copy's file isn't this picture");
+    // Copy Image in Original Format leaves its file on the system clipboard, no picture to read.
+    let name = h.state().copied_image.as_ref().map(|(name, _)| name.clone()).expect("a copied picture");
+    h.state_mut().clipboard_files_override = Some(vec![folder.join(name)]);
     paste_key(&mut h);
     assert_eq!(pasted(&h), 1, "⌘V pastes the picture into the other document");
+    h.state_mut().clipboard_files_override = None;
     let (w, hgt, rgba) = h.state().session.get(target).unwrap().page_image_rgba(0, 0).unwrap();
     assert_eq!((w, hgt, rgba), (40, 30, px.into_raw()), "the picture itself, at full size");
     let untouched = |h: &Harness<'static, PdfCraftApp>| {
