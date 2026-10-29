@@ -1868,9 +1868,19 @@ fn a_copied_picture_is_pasted_into_another_pdf_as_an_image_of_its_own() {
     h.event(egui::Event::Copy);
     h.run_steps(2);
 
-    // Copy Image in Original Format leaves a file on the system clipboard, no picture to read.
+    // Other files copied since (in Finder or Explorer), or nothing on the clipboard any more:
+    // ⌘V doesn't bring back the older picture.
     h.state_mut().active = Some(1);
     h.run_steps(2);
+    h.state_mut().clipboard_files_override = Some(vec![std::path::PathBuf::from("/elsewhere/scan p1 img1.png")]);
+    paste_key(&mut h);
+    assert_eq!(pasted(&h), 0, "a file copied elsewhere isn't PdfCraft's picture");
+    h.state_mut().clipboard_files_override = Some(Vec::new());
+    paste_key(&mut h);
+    assert_eq!(pasted(&h), 0, "an empty clipboard doesn't paste the older picture");
+    // Copy Image in Original Format leaves a file on the system clipboard, no picture to read;
+    // without the system clipboard here, PdfCraft's copy is the clipboard's.
+    h.state_mut().clipboard_files_override = None;
     paste_key(&mut h);
     assert_eq!(pasted(&h), 1, "⌘V pastes the picture into the other document");
     let (w, hgt, rgba) = h.state().session.get(target).unwrap().page_image_rgba(0, 0).unwrap();

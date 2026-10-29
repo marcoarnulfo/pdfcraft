@@ -113,6 +113,14 @@ fn is_copied_image_name(name: &str) -> bool {
     !stem.is_empty() && digits(index) && digits(page)
 }
 
+/// Whether `files` (the clipboard's file list) is the one file Copy Image in Original Format
+/// wrote into `dir`, and not files copied since in another application.
+#[cfg(not(target_arch = "wasm32"))]
+fn is_own_copy(files: &[std::path::PathBuf], dir: &std::path::Path) -> bool {
+    let [file] = files else { return false };
+    file.parent() == Some(dir) && file.file_name().and_then(|n| n.to_str()).is_some_and(is_copied_image_name)
+}
+
 /// Makes `dir` (a real folder, not a link, owned by us and private to us on Unix), removes the
 /// earlier copies PdfCraft wrote there, and writes `bytes` as a new file `name`. Links are never
 /// followed and nothing else in the folder is touched.
@@ -230,6 +238,31 @@ impl PdfCraftApp {
         arboard::Clipboard::new().and_then(|mut c| c.set().file_list(&[path])).map_err(|e| e.to_string())
     }
 
+    /// Whether the system clipboard still holds the file the last Copy Image in Original Format
+    /// put there, so ⌘V may paste PdfCraft's own copy. Without the system clipboard (tests) that
+    /// copy is the clipboard's.
+    pub(crate) fn clipboard_holds_copied_image(&self) -> bool {
+        let files = match self.clipboard_files_override.clone() {
+            Some(files) => files,
+            None if !self.system_clipboard => return true,
+            #[cfg(not(target_arch = "wasm32"))]
+            None => match arboard::Clipboard::new().and_then(|mut c| c.get().file_list()) {
+                Ok(files) => files,
+                Err(_) => return false,
+            },
+            #[cfg(target_arch = "wasm32")]
+            None => return false,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let own = clipboard_dir().is_some_and(|dir| is_own_copy(&files, &dir));
+        #[cfg(target_arch = "wasm32")]
+        let own = {
+            let _ = files;
+            false
+        };
+        own
+    }
+
     #[cfg(target_arch = "wasm32")]
     fn put_file_on_clipboard(&self, _name: &str, _bytes: &[u8]) -> Result<(), String> {
         if self.system_clipboard {
@@ -243,7 +276,7 @@ impl PdfCraftApp {
 mod tests {
     use super::safe_name;
     #[cfg(not(target_arch = "wasm32"))]
-    use super::{is_copied_image_name, write_clipboard_file};
+    use super::{is_copied_image_name, is_own_copy, write_clipboard_file};
 
     #[test]
     fn file_names_are_safe() {
@@ -261,6 +294,17 @@ mod tests {
         assert!(!is_copied_image_name("Report p1 img2.pdf"));
         assert!(!is_copied_image_name(" p1 img2.png"));
         assert!(!is_copied_image_name("Report px img2.png"));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn only_the_file_copy_image_wrote_counts_as_its_copy() {
+        let dir = std::path::Path::new("/cache/PdfCraft/Clipboard");
+        assert!(is_own_copy(&[dir.join("Report p1 img2.jpg")], dir));
+        assert!(!is_own_copy(&[], dir), "nothing on the clipboard");
+        assert!(!is_own_copy(&[std::path::PathBuf::from("/elsewhere/Report p1 img2.jpg")], dir), "another folder");
+        assert!(!is_own_copy(&[dir.join("notes.txt")], dir), "not a name Copy Image writes");
+        assert!(!is_own_copy(&[dir.join("Report p1 img2.jpg"), dir.join("Report p1 img3.jpg")], dir), "more than one file");
     }
 
     #[test]

@@ -528,6 +528,8 @@ pub struct PdfCraftApp {
     pub system_clipboard: bool,
     /// What ⌘V reads instead of the system clipboard (tests).
     pub clipboard_override: Option<create_ui::Clip>,
+    /// The files ⌘V finds on the clipboard instead of the system clipboard's (tests).
+    pub clipboard_files_override: Option<Vec<std::path::PathBuf>>,
     /// V is down as a plain key press (see [`Self::paste_key_released`]).
     v_pressed: bool,
     /// Attach file: the file to attach instead of asking (tests, automation).
