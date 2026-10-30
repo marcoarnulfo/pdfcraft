@@ -895,6 +895,16 @@ fn split_choices(cell: &str, options: &[(String, String)]) -> Vec<String> {
     if plain.iter().all(|v| is_option(v)) {
         return plain;
     }
+    // A selection is a set of option indices (/I), so a cell export_data writes holds each option
+    // at most once: a longer cell isn't a run of options, and the per-byte table below would be
+    // sized and scanned by the input alone.
+    let longest_run = options
+        .iter()
+        .fold(0usize, |n, (e, d)| n.saturating_add(e.len().max(d.len())))
+        .saturating_add(options.len().saturating_sub(1).saturating_mul(2));
+    if cell.len() > longest_run {
+        return plain;
+    }
     // prev[s] = the start of the choice that ends just before the ", " at s - 2; done = the
     // start of the last choice, which ends the cell
     let mut prev: Vec<Option<usize>> = vec![None; cell.len() + 1];

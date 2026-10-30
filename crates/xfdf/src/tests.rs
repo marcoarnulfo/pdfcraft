@@ -1984,3 +1984,13 @@ fn multi_select_cell_is_read_against_display_texts() {
     let got = fields(&doc).into_iter().find(|f| f.name == "L").unwrap().value;
     assert_eq!(got, ["1", "2"], "{r:?}");
 }
+
+/// A cell is read against the options only up to the length of every option picked once (a
+/// selection is a set of option indices, `/I`), so a long unmatched cell is split at every ", "
+/// without the per-byte table: a repeat past that length is not read as options, one at it is.
+#[test]
+fn multi_select_cell_past_every_option_once_is_split_plainly() {
+    let options = [("Smith, John", "Smith, John"), ("o", "Other")].map(|(e, d)| (e.to_string(), d.to_string())).to_vec();
+    assert_eq!(split_choices("Smith, John, Other", &options), ["Smith, John", "Other"]);
+    assert_eq!(split_choices("Smith, John, Smith, John", &options), ["Smith", "John", "Smith", "John"]);
+}
