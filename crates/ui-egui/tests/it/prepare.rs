@@ -1381,3 +1381,37 @@ fn out_of_range_properties_are_clamped_as_defaults() {
     let l = look_of(&h, &text);
     assert_eq!((l.width, l.border), (12.0, Some([1.0, 0.0, 0.0])));
 }
+
+/// A widget with a /DA of its own gives its own font size as the default; a widget without one
+/// gives the field's.
+#[test]
+fn the_default_size_is_the_selected_widgets() {
+    use pdfcraft_ui_egui::prepare::FieldTool;
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 300 400] >>",
+        "<< /Type /Page /Parent 2 0 R /Annots [5 0 R 6 0 R] >>",
+        "<< /FT /Tx /T (two) /DA (/Helv 9 Tf 0 g) /Kids [5 0 R 6 0 R] >>",
+        "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /Rect [20 300 200 330] /P 3 0 R >>",
+        "<< /Type /Annot /Subtype /Widget /Parent 4 0 R /Rect [20 250 200 280] /P 3 0 R /DA (/Helv 14 Tf 0 g) >>",
+    ];
+    let mut pdf = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(pdf.len());
+        pdf.extend(format!("{} 0 obj\n{o}\nendobj\n", i + 1).bytes());
+    }
+    let xref = pdf.len();
+    pdf.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).bytes());
+    for o in offsets {
+        pdf.extend(format!("{o:010} 00000 n \n").bytes());
+    }
+    pdf.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).bytes());
+    let mut h = harness_with("form.pdf", pdf);
+    assert!(h.state_mut().execute("form.prepare"));
+    h.run_steps(3);
+    h.state_mut().make_field_default("two", 1);
+    assert_eq!(h.state().field_defaults.get(FieldTool::Text).map(|(_, size)| size), Some(14.0), "the second widget's own /DA");
+    h.state_mut().make_field_default("two", 0);
+    assert_eq!(h.state().field_defaults.get(FieldTool::Text).map(|(_, size)| size), Some(9.0), "the field's /DA");
+}

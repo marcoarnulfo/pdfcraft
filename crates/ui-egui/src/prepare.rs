@@ -854,7 +854,8 @@ impl crate::PdfCraftApp {
         let Some(doc) = self.session.get(id) else { return };
         let Some(f) = doc.form.iter().find(|f| f.name == name) else { return };
         let Some(look) = doc.field_widget_look(name, widget) else { return };
-        self.field_defaults.set(FieldTool::of(f), look, da_size(&f.da));
+        let da = doc.field_widget_da(name, widget).unwrap_or_else(|| f.da.clone());
+        self.field_defaults.set(FieldTool::of(f), look, da_size(&da));
         self.notify(tl!("New fields of this type will look like this one").to_string());
     }
 

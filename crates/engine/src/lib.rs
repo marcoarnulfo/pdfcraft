@@ -864,6 +864,16 @@ impl Document {
         (widget < f.widgets.len()).then(|| pdfcraft_forms::widget_look(&e.cos, f, widget))
     }
 
+    /// The default appearance (`/DA`) one widget of a field is drawn with: its own when it has
+    /// one, otherwise the field's.
+    pub fn field_widget_da(&self, name: &str, widget: usize) -> Option<String> {
+        let e = self.editor.as_ref()?;
+        let f = self.form.iter().find(|f| f.name == name)?;
+        let w = f.widgets.get(widget)?;
+        let own = e.cos.get(w.obj).as_dict().and_then(|d| d.get(b"DA")).and_then(|o| e.cos.resolve(o).as_string().map(|s| s.to_text()));
+        Some(own.unwrap_or_else(|| f.da.clone()))
+    }
+
     /// A check box's or radio button's mark (Field Properties ▸ Options), `None` for other fields.
     pub fn field_check_style(&self, name: &str) -> Option<CheckStyle> {
         let e = self.editor.as_ref()?;
